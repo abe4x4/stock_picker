@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import time
 import pandas as pd # Added for reading HTML tables
+from ftplib import FTP # Added for FTP access
 
 # Import configuration settings from config.py
 from config import (
@@ -17,25 +18,41 @@ from config import (
     NEWS_KEYWORDS
 )
 
-def get_sp500_tickers():
+def get_all_us_tickers():
     """
-    Fetches a list of S&P 500 ticker symbols from Wikipedia.
+    Fetches a comprehensive list of US stock ticker symbols from NASDAQ's FTP server.
+    Combines tickers from nasdaqlisted.txt and otherlisted.txt (NYSE, AMEX).
 
     Returns:
-        list: A list of S&P 500 ticker symbols.
+        list: A list of US stock ticker symbols.
     """
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tickers = set()
+    ftp_host = "ftp.nasdaqtrader.com"
+    ftp_dir = "SymbolDirectory"
+    files_to_fetch = ["nasdaqlisted.txt", "otherlisted.txt"]
+
     try:
-        # Use pandas to read HTML tables directly into a list of DataFrames
-        tables = pd.read_html(url)
-        # The S&P 500 companies are usually in the first table
-        sp500_table = tables[0]
-        # The ticker symbol is typically in the first column (Symbol)
-        tickers = sp500_table['Symbol'].tolist()
-        print(f"Successfully fetched {len(tickers)} S&P 500 tickers.")
-        return tickers
+        with FTP(ftp_host) as ftp:
+            ftp.login() # Anonymous login
+            ftp.cwd(ftp_dir)
+
+            for filename in files_to_fetch:
+                print(f"Fetching {filename}...")
+                r = []
+                ftp.retrlines(f"RETR {filename}", r.append)
+                
+                # Parse the content
+                for line in r:
+                    if "|" in line and "Symbol" not in line: # Skip header and ensure it's a data line
+                        parts = line.split("|")
+                        if len(parts) > 0:
+                            ticker = parts[0].strip()
+                            if ticker and "^" not in ticker: # Exclude tickers with '^' (e.g., warrants)
+                                tickers.add(ticker)
+        print(f"Successfully fetched {len(tickers)} US tickers.")
+        return sorted(list(tickers))
     except Exception as e:
-        print(f"Error fetching S&P 500 tickers from Wikipedia: {e}")
+        print(f"Error fetching US tickers from NASDAQ FTP: {e}")
         return []
 
 def get_stock_data(ticker_symbol):
@@ -287,10 +304,10 @@ def main():
     #     "MVIS", "NIO", "TLRY", "WISH", "ZYNE" # Additional examples
     # ]
 
-    # Fetch S&P 500 tickers for a broader screening universe
-    ticker_list = get_sp500_tickers()
+    # Fetch a comprehensive list of US tickers
+    ticker_list = get_all_us_tickers()
     if not ticker_list:
-        print("Could not retrieve S&P 500 tickers. Exiting.")
+        print("Could not retrieve US tickers. Exiting.")
         return
 
     # You can also add a single ticker for testing:
@@ -305,10 +322,10 @@ def main():
         if meets_criteria:
             qualified_stocks.append(stock_data)
         # Be respectful to APIs and websites, add a small delay between requests
-        # For screening a large list like S&P 500, consider reducing this delay
-        # or implementing a more sophisticated rate limiting strategy.
-        # A 2-second delay for 500 stocks will take ~16 minutes.
-        time.sleep(0.5) # Reduced delay for faster screening during development
+        # Screening a large list of US stocks will take a significant amount of time.
+        # A 0.5-second delay for ~10,000 stocks will take ~1.5 hours.
+        # Consider increasing the delay if you encounter rate limiting issues.
+        time.sleep(0.5) # Delay between stock checks
 
     print()
     print("--- Screening Complete ---")
