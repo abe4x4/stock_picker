@@ -273,8 +273,8 @@ def main():
         # Be respectful to APIs and websites, add a small delay between requests
         time.sleep(2)
 
-    print("
---- Screening Complete ---")
+    print()
+    print("--- Screening Complete ---")
     if qualified_stocks:
         print() # Add an extra newline for formatting
         print("Qualified Stocks:")
