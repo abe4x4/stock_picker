@@ -187,7 +187,7 @@ def screen_stock(ticker_symbol):
     print(f"--- Screening {ticker_symbol} ---")
     ticker, history, info = get_stock_data(ticker_symbol)
 
-    if not all([ticker, history, info]):
+    if ticker is None or history is None or history.empty or info is None:
         print(f"Could not retrieve complete data for {ticker_symbol}. Skipping.")
         return False, {}
 
