@@ -234,8 +234,8 @@ def screen_stock(ticker_symbol):
         "shares_outstanding_millions": shares_outstanding_millions
     }
 
-    print(f"--- {ticker_symbol} meets all criteria: {all_criteria_met} ---
-")
+    print(f"--- {ticker_symbol} meets all criteria: {all_criteria_met} ---")
+    print() # Add an extra newline for formatting, similar to original intent
     return all_criteria_met, results
 
 def main():
@@ -264,8 +264,8 @@ def main():
 
     qualified_stocks = []
 
-    print("Starting stock screening process...
-")
+    print("Starting stock screening process...")
+    print() # Add an extra newline for formatting, similar to original intent
     for ticker_symbol in ticker_list:
         meets_criteria, stock_data = screen_stock(ticker_symbol)
         if meets_criteria:
@@ -276,8 +276,8 @@ def main():
     print("
 --- Screening Complete ---")
     if qualified_stocks:
-        print("
-Qualified Stocks:")
+        print() # Add an extra newline for formatting
+        print("Qualified Stocks:")
         for stock in qualified_stocks:
             print(f"  Ticker: {stock['ticker']}")
             print(f"    Current Price: ${stock['current_price']:.2f}")
