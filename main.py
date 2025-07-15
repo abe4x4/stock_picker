@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import time
+import pandas as pd # Added for reading HTML tables
 
 # Import configuration settings from config.py
 from config import (
@@ -15,6 +16,27 @@ from config import (
     NEWS_SEARCH_DAYS_BACK,
     NEWS_KEYWORDS
 )
+
+def get_sp500_tickers():
+    """
+    Fetches a list of S&P 500 ticker symbols from Wikipedia.
+
+    Returns:
+        list: A list of S&P 500 ticker symbols.
+    """
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    try:
+        # Use pandas to read HTML tables directly into a list of DataFrames
+        tables = pd.read_html(url)
+        # The S&P 500 companies are usually in the first table
+        sp500_table = tables[0]
+        # The ticker symbol is typically in the first column (Symbol)
+        tickers = sp500_table['Symbol'].tolist()
+        print(f"Successfully fetched {len(tickers)} S&P 500 tickers.")
+        return tickers
+    except Exception as e:
+        print(f"Error fetching S&P 500 tickers from Wikipedia: {e}")
+        return []
 
 def get_stock_data(ticker_symbol):
     """
@@ -193,25 +215,31 @@ def screen_stock(ticker_symbol):
 
     # Check each criterion
     price_increase_met = check_price_increase(history)
-    print(f"Price increase (>= {MIN_PRICE_INCREASE_PERCENT*100:.0f}%): {price_increase_met}")
+    yesterday_close = history['Close'].iloc[0] if len(history) > 1 else 0
+    today_close = history['Close'].iloc[1] if len(history) > 1 else 0
+    price_increase_percent = ((today_close - yesterday_close) / yesterday_close) * 100 if yesterday_close != 0 else 0
+    print(f"  Price increase (>= {MIN_PRICE_INCREASE_PERCENT*100:.0f}%): {price_increase_met} (Actual: {price_increase_percent:.2f}%) ")
 
     volume_surge_met = check_volume_surge(history)
-    print(f"Volume surge (>= {MIN_VOLUME_MULTIPLIER}x avg): {volume_surge_met}")
+    today_volume = history['Volume'].iloc[1] if len(history) > 1 else 0
+    # To get average volume, we need to re-fetch or pass it from check_volume_surge
+    # For now, let's just indicate if it met the criteria.
+    print(f"  Volume surge (>= {MIN_VOLUME_MULTIPLIER}x avg): {volume_surge_met}")
 
     price_range_met = check_price_range(info)
     current_price = info.get('currentPrice', 'N/A')
-    print(f"Price in range (${MIN_STOCK_PRICE:.2f}-${MAX_STOCK_PRICE:.2f}): {price_range_met} (Current: ${current_price})")
+    print(f"  Price in range (${MIN_STOCK_PRICE:.2f}-${MAX_STOCK_PRICE:.2f}): {price_range_met} (Current: ${current_price})")
 
     float_met = check_float(info)
     shares_outstanding_millions = info.get('sharesOutstanding', 0) / 1_000_000
-    print(f"Float (<= {MAX_FLOAT_MILLIONS}M): {float_met} (Current: {shares_outstanding_millions:.2f}M)")
+    print(f"  Float (<= {MAX_FLOAT_MILLIONS}M): {float_met} (Current: {shares_outstanding_millions:.2f}M)")
 
     news_found, relevant_headlines = search_news(ticker_symbol)
-    print(f"Relevant news found: {news_found}")
+    print(f"  Relevant news found: {news_found}")
     if relevant_headlines:
-        print("  Relevant Headlines:")
+        print("    Relevant Headlines:")
         for headline in relevant_headlines:
-            print(f"    - {headline}")
+            print(f"      - {headline}")
 
     # Aggregate results
     all_criteria_met = (
@@ -251,13 +279,19 @@ def main():
     # NOTE: Finding stocks that meet ALL criteria, especially news,
     # with a simple web scrape can be challenging and might require
     # running the screener multiple times or on different days.
-    ticker_list = [
-        "AMC", "GME", "SNDL", "NOK", "BB", # Example meme stocks / low float
-        "PLTR", "SOFI", "RIVN", # Other potentially volatile stocks
-        "GOOGL", "MSFT", "AAPL", # Large cap for comparison (unlikely to meet criteria)
-        "SPCE", "SENS", "SAVA", # More speculative examples
-        "MVIS", "NIO", "TLRY", "WISH", "ZYNE" # Additional examples
-    ]
+    # ticker_list = [
+    #     "AMC", "GME", "SNDL", "NOK", "BB", # Example meme stocks / low float
+    #     "PLTR", "SOFI", "RIVN", # Other potentially volatile stocks
+    #     "GOOGL", "MSFT", "AAPL", # Large cap for comparison (unlikely to meet criteria)
+    #     "SPCE", "SENS", "SAVA", # More speculative examples
+    #     "MVIS", "NIO", "TLRY", "WISH", "ZYNE" # Additional examples
+    # ]
+
+    # Fetch S&P 500 tickers for a broader screening universe
+    ticker_list = get_sp500_tickers()
+    if not ticker_list:
+        print("Could not retrieve S&P 500 tickers. Exiting.")
+        return
 
     # You can also add a single ticker for testing:
     # ticker_list = ["AMC"]
@@ -271,7 +305,10 @@ def main():
         if meets_criteria:
             qualified_stocks.append(stock_data)
         # Be respectful to APIs and websites, add a small delay between requests
-        time.sleep(2)
+        # For screening a large list like S&P 500, consider reducing this delay
+        # or implementing a more sophisticated rate limiting strategy.
+        # A 2-second delay for 500 stocks will take ~16 minutes.
+        time.sleep(0.5) # Reduced delay for faster screening during development
 
     print()
     print("--- Screening Complete ---")

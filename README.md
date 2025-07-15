@@ -63,7 +63,9 @@ To run the stock screener, simply execute the `main.py` script from your activat
 python main.py
 ```
 
-The script will iterate through a predefined list of ticker symbols (which you can modify in `main.py`) and print the results of the screening process for each stock. Finally, it will list all stocks that met all the specified criteria.
+The script will now automatically fetch the list of S&P 500 ticker symbols from Wikipedia and iterate through them, applying the defined screening criteria. It will print detailed results for each stock, indicating whether it met each criterion. Finally, it will list all stocks that met all the specified criteria.
+
+**Note on Performance:** The script includes a small delay (`time.sleep`) between requests to avoid overwhelming data sources. For screening a large number of stocks (like the S&P 500), this process can take several minutes. You can adjust the `time.sleep` duration in `main.py` if needed, but be mindful of rate limits from data providers.
 
 ## Future Enhancements / To-Do List
 
