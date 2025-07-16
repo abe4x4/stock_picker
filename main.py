@@ -325,6 +325,7 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     print("Starting stock screening process...")
+    start_time = time.time() # Record start time
     print() # Add an extra newline for formatting, similar to original intent
     for ticker_symbol in ticker_list:
         total_stocks_checked += 1
@@ -339,6 +340,8 @@ def main():
 
     print()
     print("--- Screening Complete ---")
+    end_time = time.time() # Record end time
+    duration = end_time - start_time # Calculate duration
 
     # Generate report filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -346,7 +349,8 @@ def main():
 
     with open(report_filename, "w") as f:
         f.write(f"Stock Screener Report - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n")
-        f.write(f"Total stocks checked: {total_stocks_checked}\n\n")
+        f.write(f"Total stocks checked: {total_stocks_checked}\n")
+        f.write(f"Screening duration: {duration:.2f} seconds\n\n")
 
         if qualified_stocks:
             print() # Add an extra newline for formatting
