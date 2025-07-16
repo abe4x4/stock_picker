@@ -31,6 +31,12 @@ NEWS_SEARCH_DAYS_BACK = 1
 # This is a basic approach; more advanced NLP would be needed for true sentiment analysis.
 NEWS_KEYWORDS = ["earnings", "breakthrough", "acquisition", "partnership", "fda", "approval", "contract", "innovation", "growth", "expansion"]
 
+# --- Performance Configuration ---
+# Number of concurrent workers (threads) to use for screening stocks.
+# Adjust based on your internet connection speed and API rate limits.
+# A higher number means faster screening but increases the risk of being rate-limited.
+MAX_WORKERS = 10 # For example, 10 concurrent requests
+
 # --- API Keys (if applicable) ---
 # If you were using a paid API for more robust news or financial data,
 # you would store your API keys here. For this basic version, no API keys are needed.

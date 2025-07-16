@@ -54,6 +54,7 @@ All customizable screening criteria are located in `config.py`. Open this file a
 - `MAX_FLOAT_MILLIONS`: Maximum float in millions of shares.
 - `NEWS_SEARCH_DAYS_BACK`: How many days back to consider news as relevant (currently not fully implemented in basic news search).
 - `NEWS_KEYWORDS`: A list of keywords to look for in news headlines.
+- `MAX_WORKERS`: Number of concurrent threads to use for fetching stock data and news. A higher number will speed up the screening but increases the risk of hitting API rate limits. Adjust this value based on your internet connection and the generosity of the data providers (Yahoo Finance, Google News).
 
 ## Usage
 
@@ -63,13 +64,14 @@ To run the stock screener, simply execute the `main.py` script from your activat
 python main.py
 ```
 
-The script will now automatically fetch a comprehensive list of US stock ticker symbols from NASDAQ's FTP server and iterate through them, applying the defined screening criteria. It will print detailed results for each stock, indicating whether it met each criterion. Finally, it will list all stocks that met all the specified criteria.
+The script will now automatically fetch a comprehensive list of US stock ticker symbols from NASDAQ's FTP server and iterate through them concurrently, applying the defined screening criteria. It will print detailed results for each stock, indicating whether it met each criterion. Finally, it will list all stocks that met all the specified criteria.
 
 **Reporting:** After each run, a text file will be generated in a subfolder named `results/`. The filename will include the search date and time (e.g., `stock_screener_report_YYYYMMDD_HHMMSS.txt`). This file will contain:
 - The total number of stocks checked.
+- The total time taken for the screening.
 - A list of all stocks that matched the search criteria, including their Name, Symbol, Price, Volume, and Percentage of Increase.
 
-**Note on Performance:** Screening a large number of stocks (potentially thousands) will take a significant amount of time. The script includes a small delay (`time.sleep`) between requests to avoid overwhelming data sources and to be respectful of API limits. You can adjust this delay in `main.py` if needed, but be mindful of potential rate limiting issues from data providers like Yahoo Finance and Google News.
+**Note on Performance:** By utilizing concurrent processing, the screening time has been significantly reduced. However, screening a large number of stocks (potentially thousands) still takes time. Be mindful of potential rate limiting issues from data providers like Yahoo Finance and Google News, especially if you increase `MAX_WORKERS` significantly.
 
 ## Future Enhancements / To-Do List
 

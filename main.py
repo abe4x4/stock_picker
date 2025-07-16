@@ -7,6 +7,7 @@ import time
 import pandas as pd # Added for reading HTML tables
 from ftplib import FTP # Added for FTP access
 import os # Added for file system operations
+import concurrent.futures # Added for concurrent processing
 
 # Import configuration settings from config.py
 from config import (
@@ -16,7 +17,8 @@ from config import (
     MAX_STOCK_PRICE,
     MAX_FLOAT_MILLIONS,
     NEWS_SEARCH_DAYS_BACK,
-    NEWS_KEYWORDS
+    NEWS_KEYWORDS,
+    MAX_WORKERS # Added for concurrency
 )
 
 def get_all_us_tickers():
@@ -327,16 +329,21 @@ def main():
     print("Starting stock screening process...")
     start_time = time.time() # Record start time
     print() # Add an extra newline for formatting, similar to original intent
-    for ticker_symbol in ticker_list:
-        total_stocks_checked += 1
-        meets_criteria, stock_data = screen_stock(ticker_symbol)
-        if meets_criteria:
-            qualified_stocks.append(stock_data)
-        # Be respectful to APIs and websites, add a small delay between requests
-        # Screening a large list of US stocks will take a significant amount of time.
-        # A 0.5-second delay for ~10,000 stocks will take ~1.5 hours.
-        # Consider increasing the delay if you encounter rate limiting issues.
-        time.sleep(0.5) # Delay between stock checks
+
+    # Use ThreadPoolExecutor for concurrent processing
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # Submit all screening tasks
+        future_to_ticker = {executor.submit(screen_stock, ticker_symbol): ticker_symbol for ticker_symbol in ticker_list}
+
+        for future in concurrent.futures.as_completed(future_to_ticker):
+            ticker_symbol = future_to_ticker[future]
+            total_stocks_checked += 1
+            try:
+                meets_criteria, stock_data = future.result()
+                if meets_criteria:
+                    qualified_stocks.append(stock_data)
+            except Exception as exc:
+                print(f'{ticker_symbol} generated an exception: {exc}')
 
     print()
     print("--- Screening Complete ---")
@@ -350,6 +357,7 @@ def main():
     with open(report_filename, "w") as f:
         f.write(f"Stock Screener Report - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n")
         f.write(f"Total stocks checked: {total_stocks_checked}\n")
+        f.write(f"Screening duration: {duration:.2f} seconds\n\n")
         f.write(f"Screening duration: {duration:.2f} seconds\n\n")
 
         if qualified_stocks:
