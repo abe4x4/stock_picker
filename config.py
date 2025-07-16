@@ -39,7 +39,7 @@ MAX_WORKERS = 5 # Reduced from 10 to be more conservative with rate limits
 
 # Minimum delay (in seconds) between consecutive requests to external APIs.
 # This helps prevent hitting rate limits. Adjust based on observed errors.
-RATE_LIMIT_DELAY = 1.0 # 1 second delay between requests
+
 
 # --- API Keys (if applicable) ---
 # If you were using a paid API for more robust news or financial data,

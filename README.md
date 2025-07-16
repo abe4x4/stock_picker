@@ -55,7 +55,6 @@ All customizable screening criteria are located in `config.py`. Open this file a
 - `NEWS_SEARCH_DAYS_BACK`: How many days back to consider news as relevant (currently not fully implemented in basic news search).
 - `NEWS_KEYWORDS`: A list of keywords to look for in news headlines.
 - `MAX_WORKERS`: Number of concurrent threads to use for fetching stock data and news. A higher number will speed up the screening but increases the risk of hitting API rate limits. Adjust this value based on your internet connection and the generosity of the data providers (Yahoo Finance, Google News).
-- `RATE_LIMIT_DELAY`: Minimum delay (in seconds) between consecutive requests to external APIs. This helps prevent hitting rate limits. Adjust this value if you continue to experience "Too Many Requests" errors.
 
 ## Usage
 
@@ -72,7 +71,8 @@ The script will now automatically fetch a comprehensive list of US stock ticker 
 - The total time taken for the screening.
 - A list of all stocks that matched the search criteria, including their Name, Symbol, Price, Volume, and Percentage of Increase.
 
-**Note on Performance and Rate Limiting:** By utilizing concurrent processing and a rate-limiting mechanism, the screening time has been significantly reduced while aiming to prevent "Too Many Requests" errors. However, screening a large number of stocks (potentially thousands) still takes time. If you continue to encounter rate limiting, consider increasing `RATE_LIMIT_DELAY` or decreasing `MAX_WORKERS` in `config.py`.
+**Note on Performance and Adaptive Rate Limiting:**
+By utilizing concurrent processing and an **adaptive rate-limiting mechanism**, the screening time has been significantly reduced while aiming to prevent "Too Many Requests" errors. The system will automatically increase the delay between requests if rate limits are encountered and gradually reduce it when requests are successful. This helps to find the fastest possible screening speed without hitting API limits. You can still adjust `MAX_WORKERS` in `config.py` to control the level of concurrency.
 
 ## Future Enhancements / To-Do List
 

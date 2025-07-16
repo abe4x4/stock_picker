@@ -8,6 +8,7 @@ import pandas as pd # Added for reading HTML tables
 from ftplib import FTP # Added for FTP access
 import os # Added for file system operations
 import concurrent.futures # Added for concurrent processing
+import threading # Added for thread-safe rate limiting
 
 # Import configuration settings from config.py
 from config import (
@@ -18,25 +19,28 @@ from config import (
     MAX_FLOAT_MILLIONS,
     NEWS_SEARCH_DAYS_BACK,
     NEWS_KEYWORDS,
-    MAX_WORKERS, # Added for concurrency
-    RATE_LIMIT_DELAY # Added for rate limiting
+    MAX_WORKERS
 )
 
-# Global variable to track the last request time for rate limiting
+# Global variables for adaptive rate limiting
+_current_rate_limit_delay = 0.1 # Initial small delay (seconds)
+_rate_limit_lock = threading.Lock()
 _last_request_time = 0
+_max_rate_limit_delay = 60 # Maximum delay to prevent excessive waiting
 
 def rate_limit_decorator(func):
     """
     A decorator to enforce a minimum delay between function calls
-    to prevent hitting API rate limits.
+    and handle adaptive rate limiting.
     """
     def wrapper(*args, **kwargs):
-        global _last_request_time
-        elapsed_time = time.time() - _last_request_time
-        if elapsed_time < RATE_LIMIT_DELAY:
-            sleep_time = RATE_LIMIT_DELAY - elapsed_time
-            time.sleep(sleep_time)
-        _last_request_time = time.time()
+        global _last_request_time, _current_rate_limit_delay
+        with _rate_limit_lock:
+            elapsed_time = time.time() - _last_request_time
+            if elapsed_time < _current_rate_limit_delay:
+                sleep_time = _current_rate_limit_delay - elapsed_time
+                time.sleep(sleep_time)
+            _last_request_time = time.time()
         return func(*args, **kwargs)
     return wrapper
 
@@ -81,6 +85,7 @@ def get_all_us_tickers():
 def get_stock_data(ticker_symbol):
     """
     Fetches historical and current stock data for a given ticker symbol using yfinance.
+    Includes retry logic with adaptive rate limiting.
 
     Args:
         ticker_symbol (str): The stock ticker symbol (e.g., "AAPL", "MSFT").
@@ -90,17 +95,31 @@ def get_stock_data(ticker_symbol):
             - ticker (yfinance.Ticker object): The yfinance Ticker object for the symbol.
             - history (pandas.DataFrame): Historical data for the last 2 days.
             - info (dict): Dictionary of various stock information.
-            Returns (None, None, None) if data cannot be fetched.
+            Returns (None, None, None) if data cannot be fetched after retries.
     """
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        # Fetch history for the last 2 days to calculate daily change
-        history = ticker.history(period="2d")
-        info = ticker.info
-        return ticker, history, info
-    except Exception as e:
-        print(f"Error fetching data for {ticker_symbol}: {e}")
-        return None, None, None
+    global _current_rate_limit_delay
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            history = ticker.history(period="2d")
+            info = ticker.info
+            # If successful, reduce delay slightly (but not below initial)
+            with _rate_limit_lock:
+                _current_rate_limit_delay = max(0.1, _current_rate_limit_delay * 0.9)
+            return ticker, history, info
+        except Exception as e:
+            error_message = str(e).lower()
+            if "too many requests" in error_message or "rate limit" in error_message or "429" in error_message:
+                with _rate_limit_lock:
+                    _current_rate_limit_delay = min(_max_rate_limit_delay, _current_rate_limit_delay * 1.5)
+                print(f"Rate limit hit for {ticker_symbol}. Increasing delay to {_current_rate_limit_delay:.2f}s. Retrying in {attempt + 1}s...")
+                time.sleep(attempt + 1) # Exponential backoff for retries
+            else:
+                print(f"Error fetching data for {ticker_symbol} (attempt {attempt + 1}/{max_retries}): {e}")
+                time.sleep(1) # Small delay for other errors
+    print(f"Failed to fetch data for {ticker_symbol} after {max_retries} attempts.")
+    return None, None, None
 
 def check_price_increase(history):
     """
@@ -198,6 +217,7 @@ def search_news(ticker_symbol):
     Performs a basic web search for news related to the ticker symbol
     and checks if any NEWS_KEYWORDS are present in the headlines.
     This is a simplified approach and may not always find direct causal news.
+    Includes retry logic with adaptive rate limiting.
 
     Args:
         ticker_symbol (str): The stock ticker symbol.
@@ -206,34 +226,47 @@ def search_news(ticker_symbol):
         bool: True if relevant news is found, False otherwise.
         list: A list of relevant news headlines found.
     """
+    global _current_rate_limit_delay
     search_query = f"{ticker_symbol} stock news"
-    # Using Google News as a source for a basic search
     url = f"https://news.google.com/search?q={search_query}&hl=en-US&gl=US&ceid=US:en"
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'} # Some sites block requests without a User-Agent
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'} # Some sites block requests without a User-Agent
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        found_headlines = []
-        # Google News uses 'h3' tags for headlines
-        for article in soup.find_all('h3'):
-            headline = article.get_text().lower()
-            # Check if any keyword is in the headline
-            if any(keyword in headline for keyword in NEWS_KEYWORDS):
-                # Check if the news is recent (within NEWS_SEARCH_DAYS_BACK)
-                # This part is tricky with basic scraping as dates might not be easily parsable
-                # For simplicity, we'll assume top results are recent.
-                # A more robust solution would parse the date from the article.
-                found_headlines.append(article.get_text())
-        return bool(found_headlines), found_headlines
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching news for {ticker_symbol}: {e}")
-        return False, []
-    except Exception as e:
-        print(f"An unexpected error occurred during news search for {ticker_symbol}: {e}")
-        return False, []
+            found_headlines = []
+            # Google News uses 'h3' tags for headlines
+            for article in soup.find_all('h3'):
+                headline = article.get_text().lower()
+                # Check if any keyword is in the headline
+                if any(keyword in headline for keyword in NEWS_KEYWORDS):
+                    # Check if the news is recent (within NEWS_SEARCH_DAYS_BACK)
+                    # This part is tricky with basic scraping as dates might not be easily parsable
+                    # For simplicity, we'll assume top results are recent.
+                    # A more robust solution would parse the date from the article.
+                    found_headlines.append(article.get_text())
+            # If successful, reduce delay slightly
+            with _rate_limit_lock:
+                _current_rate_limit_delay = max(0.1, _current_rate_limit_delay * 0.9)
+            return bool(found_headlines), found_headlines
+        except requests.exceptions.RequestException as e:
+            error_message = str(e).lower()
+            if "too many requests" in error_message or "rate limit" in error_message or "429" in error_message:
+                with _rate_limit_lock:
+                    _current_rate_limit_delay = min(_max_rate_limit_delay, _current_rate_limit_delay * 1.5)
+                print(f"Rate limit hit for news search {ticker_symbol}. Increasing delay to {_current_rate_limit_delay:.2f}s. Retrying in {attempt + 1}s...")
+                time.sleep(attempt + 1) # Exponential backoff for retries
+            else:
+                print(f"Error fetching news for {ticker_symbol} (attempt {attempt + 1}/{max_retries}): {e}")
+                time.sleep(1) # Small delay for other errors
+        except Exception as e:
+            print(f"An unexpected error occurred during news search for {ticker_symbol} (attempt {attempt + 1}/{max_retries}): {e}")
+            time.sleep(1) # Small delay for other errors
+    print(f"Failed to fetch news for {ticker_symbol} after {max_retries} attempts.")
+    return False, []
 
 def screen_stock(ticker_symbol):
     """
