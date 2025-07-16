@@ -65,6 +65,10 @@ python main.py
 
 The script will now automatically fetch a comprehensive list of US stock ticker symbols from NASDAQ's FTP server and iterate through them, applying the defined screening criteria. It will print detailed results for each stock, indicating whether it met each criterion. Finally, it will list all stocks that met all the specified criteria.
 
+**Reporting:** After each run, a text file will be generated in a subfolder named `results/`. The filename will include the search date and time (e.g., `stock_screener_report_YYYYMMDD_HHMMSS.txt`). This file will contain:
+- The total number of stocks checked.
+- A list of all stocks that matched the search criteria, including their Name, Symbol, Price, Volume, and Percentage of Increase.
+
 **Note on Performance:** Screening a large number of stocks (potentially thousands) will take a significant amount of time. The script includes a small delay (`time.sleep`) between requests to avoid overwhelming data sources and to be respectful of API limits. You can adjust this delay in `main.py` if needed, but be mindful of potential rate limiting issues from data providers like Yahoo Finance and Google News.
 
 ## Future Enhancements / To-Do List

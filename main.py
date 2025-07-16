@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import time
 import pandas as pd # Added for reading HTML tables
 from ftplib import FTP # Added for FTP access
+import os # Added for file system operations
 
 # Import configuration settings from config.py
 from config import (
@@ -276,7 +277,10 @@ def screen_stock(ticker_symbol):
         "news_found": news_found,
         "relevant_headlines": relevant_headlines,
         "current_price": current_price,
-        "shares_outstanding_millions": shares_outstanding_millions
+        "shares_outstanding_millions": shares_outstanding_millions,
+        "company_name": info.get('longName', ticker_symbol), # Add company name
+        "today_volume": history['Volume'].iloc[1] if len(history) > 1 else 0, # Add today's volume
+        "price_increase_percent": price_increase_percent # Add price increase percentage
     }
 
     print(f"--- {ticker_symbol} meets all criteria: {all_criteria_met} ---")
@@ -314,10 +318,16 @@ def main():
     # ticker_list = ["AMC"]
 
     qualified_stocks = []
+    total_stocks_checked = 0
+
+    # Create results directory if it doesn't exist
+    results_dir = "results"
+    os.makedirs(results_dir, exist_ok=True)
 
     print("Starting stock screening process...")
     print() # Add an extra newline for formatting, similar to original intent
     for ticker_symbol in ticker_list:
+        total_stocks_checked += 1
         meets_criteria, stock_data = screen_stock(ticker_symbol)
         if meets_criteria:
             qualified_stocks.append(stock_data)
@@ -329,20 +339,42 @@ def main():
 
     print()
     print("--- Screening Complete ---")
-    if qualified_stocks:
-        print() # Add an extra newline for formatting
-        print("Qualified Stocks:")
-        for stock in qualified_stocks:
-            print(f"  Ticker: {stock['ticker']}")
-            print(f"    Current Price: ${stock['current_price']:.2f}")
-            print(f"    Shares Outstanding (M): {stock['shares_outstanding_millions']:.2f}")
-            if stock['relevant_headlines']:
-                print("    Relevant News Headlines:")
-                for headline in stock['relevant_headlines']:
-                    print(f"      - {headline}")
-            print("-" * 30)
-    else:
-        print("No stocks met all the specified criteria today.")
+
+    # Generate report filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_filename = os.path.join(results_dir, f"stock_screener_report_{timestamp}.txt")
+
+    with open(report_filename, "w") as f:
+        f.write(f"Stock Screener Report - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n")
+        f.write(f"Total stocks checked: {total_stocks_checked}\n\n")
+
+        if qualified_stocks:
+            print() # Add an extra newline for formatting
+            print("Qualified Stocks:")
+            f.write("Qualified Stocks:\n")
+            for stock in qualified_stocks:
+                print(f"  Ticker: {stock['ticker']}")
+                print(f"    Current Price: ${stock['current_price']:.2f}")
+                print(f"    Shares Outstanding (M): {stock['shares_outstanding_millions']:.2f}")
+                if stock['relevant_headlines']:
+                    print("    Relevant News Headlines:")
+                    for headline in stock['relevant_headlines']:
+                        print(f"      - {headline}")
+                print("-" * 30)
+
+                f.write(f"  Name: {stock['company_name']}\n")
+                f.write(f"  Symbol: {stock['ticker']}\n")
+                f.write(f"  Price: ${stock['current_price']:.2f}\n")
+                f.write(f"  Volume: {stock['today_volume']:,}\n")
+                f.write(f"  Price Increase: {stock['price_increase_percent']:.2f}%\n")
+                if stock['relevant_headlines']:
+                    f.write("  Relevant News Headlines:\n")
+                    for headline in stock['relevant_headlines']:
+                        f.write(f"    - {headline}\n")
+                f.write("\n")
+        else:
+            print("No stocks met all the specified criteria today.")
+            f.write("No stocks met all the specified criteria today.\n")
 
 if __name__ == "__main__":
     main()
