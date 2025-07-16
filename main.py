@@ -18,8 +18,27 @@ from config import (
     MAX_FLOAT_MILLIONS,
     NEWS_SEARCH_DAYS_BACK,
     NEWS_KEYWORDS,
-    MAX_WORKERS # Added for concurrency
+    MAX_WORKERS, # Added for concurrency
+    RATE_LIMIT_DELAY # Added for rate limiting
 )
+
+# Global variable to track the last request time for rate limiting
+_last_request_time = 0
+
+def rate_limit_decorator(func):
+    """
+    A decorator to enforce a minimum delay between function calls
+    to prevent hitting API rate limits.
+    """
+    def wrapper(*args, **kwargs):
+        global _last_request_time
+        elapsed_time = time.time() - _last_request_time
+        if elapsed_time < RATE_LIMIT_DELAY:
+            sleep_time = RATE_LIMIT_DELAY - elapsed_time
+            time.sleep(sleep_time)
+        _last_request_time = time.time()
+        return func(*args, **kwargs)
+    return wrapper
 
 def get_all_us_tickers():
     """
@@ -58,6 +77,7 @@ def get_all_us_tickers():
         print(f"Error fetching US tickers from NASDAQ FTP: {e}")
         return []
 
+@rate_limit_decorator
 def get_stock_data(ticker_symbol):
     """
     Fetches historical and current stock data for a given ticker symbol using yfinance.
@@ -172,6 +192,7 @@ def check_float(info):
     shares_outstanding_millions = shares_outstanding / 1_000_000
     return shares_outstanding_millions <= MAX_FLOAT_MILLIONS
 
+@rate_limit_decorator
 def search_news(ticker_symbol):
     """
     Performs a basic web search for news related to the ticker symbol
@@ -357,7 +378,6 @@ def main():
     with open(report_filename, "w") as f:
         f.write(f"Stock Screener Report - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n")
         f.write(f"Total stocks checked: {total_stocks_checked}\n")
-        f.write(f"Screening duration: {duration:.2f} seconds\n\n")
         f.write(f"Screening duration: {duration:.2f} seconds\n\n")
 
         if qualified_stocks:
